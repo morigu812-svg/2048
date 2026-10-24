@@ -2655,12 +2655,6 @@ document.addEventListener(
     modeSelect.addEventListener("change", function () {
       const nextMode = modeSelect.value === "hardcore" ? "hardcore" : "standard";
       if (nextMode === gameMode) return;
-      if (!window.confirm("モードを変更すると、現在のゲームを終了して新しい盤面を開始します。よろしいですか？")) {
-        modeSelect.value = gameMode;
-        return;
-      }
-      // 切り替える前に、今のモードの盤面を必ず保存する。
-      saveCurrentGame();
       gameMode = nextMode;
       loadBestForMode(gameMode);
       bestElement.textContent = best;
