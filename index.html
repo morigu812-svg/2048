@@ -462,6 +462,64 @@ button:active {
 }
 
 
+/* モード切り替え時も操作列の幅を保ち、文字のはみ出しを防ぐ */
+.mode-controls {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: -4px 0 12px;
+}
+
+.mode-controls label {
+  font-size: 14px;
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.mode-controls select {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  padding: 10px 30px 10px 10px;
+  border: 0;
+  border-radius: 5px;
+  background: #bbada0;
+  color: white;
+  font: inherit;
+  font-size: 13px;
+  font-weight: bold;
+  text-overflow: ellipsis;
+}
+
+.mode-controls button {
+  min-width: 0;
+  white-space: nowrap;
+}
+
+@media (max-width: 520px) {
+  .game { width: min(94vw, 500px); }
+  .mode-controls {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px;
+  }
+  .mode-controls label { grid-column: 1; align-self: end; }
+  .mode-controls select { grid-column: 2; }
+  .mode-controls button { width: 100%; padding: 10px 8px; }
+}
+
+@media (max-width: 360px) {
+  .mode-controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .mode-controls label,
+  .mode-controls select { grid-column: 1; }
+  .mode-controls label { margin-bottom: -4px; }
+  .mode-controls button { grid-column: 1; }
+}
+
 /* =========================
    小さい画面
 ========================= */
@@ -573,9 +631,9 @@ button:active {
     <span class="info-text">矢印キー / WASD・スワイプで操作</span>
     <button id="newGameButton" type="button">新しいゲーム</button>
   </div>
-  <div class="info" style="margin-top:-4px; flex-wrap:wrap;">
-    <label for="modeSelect" style="font-size:14px;font-weight:bold;">モード</label>
-    <select id="modeSelect" aria-label="ゲームモード" style="flex:1;min-width:180px;padding:10px;border:0;border-radius:5px;background:#bbada0;color:white;font-weight:bold;">
+  <div class="mode-controls" aria-label="ゲーム操作">
+    <label for="modeSelect">モード</label>
+    <select id="modeSelect" aria-label="ゲームモード">
       <option value="standard">スタンダード（1手戻すあり）</option>
       <option value="hardcore">ハードコア（巻き戻しなし）</option>
     </select>
