@@ -867,7 +867,7 @@ document.addEventListener(
         for (const value of row) {
           if (
             value !== null &&
-            (!Number.isSafeInteger(value) || value < 2 || (value & (value - 1)) !== 0)
+            (!Number.isSafeInteger(value) || value < 2 || !Number.isInteger(Math.log2(value)))
           ) {
             return false;
           }
