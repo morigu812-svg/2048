@@ -24,23 +24,24 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-html,
-body {
-  margin: 0;
-  padding: 0;
-
-  width: 100%;
-  min-height: 100%;
-
-  background: #faf8ef;
-
-  font-family:
-    Arial,
-    Helvetica,
-    sans-serif;
-
-  color: #776e65;
-}
+html, body { margin:0; padding:0; width:100%; min-height:100%; background:#faf8ef; font-family:Arial,Helvetica,sans-serif; color:#776e65; transition:background-color 180ms ease,color 180ms ease; }
+body.dark-mode { background:#20211f; color:#e1ded7; }
+body.dark-mode .score-box { background:#454640; color:#f2f0e9; }
+body.dark-mode #board { background:#454640; }
+body.dark-mode .grid-cell { background:#30312e; }
+body.dark-mode button { background:#565750; color:#f2f0e9; }
+body.dark-mode .tile.n2 { background:#4a4943; color:#f0eee7; }
+body.dark-mode .tile.n4 { background:#625b4d; color:#f5f0e6; }
+body.dark-mode .tile.n8 { background:#a77b52; color:#fffaf2; }
+body.dark-mode .tile.n16 { background:#ae6c4d; color:#fffaf2; }
+body.dark-mode .tile.n32 { background:#ad5e4b; color:#fffaf2; }
+body.dark-mode .tile.n64 { background:#a44d3d; color:#fffaf2; }
+body.dark-mode .tile.n128 { background:#9c8750; color:#fffaf2; }
+body.dark-mode .tile.n256 { background:#9c8345; color:#fffaf2; }
+body.dark-mode .tile.n512 { background:#92783d; color:#fffaf2; }
+body.dark-mode .tile.n1024 { background:#866c35; color:#fffaf2; }
+body.dark-mode .tile.n2048 { background:#79602e; color:#fffaf2; }
+body.dark-mode #message { color:#e1ded7; }
 
 body {
   display: flex;
@@ -568,22 +569,18 @@ button:active {
   </div>
 
 
-  <!-- =====================
-       INFO
-  ====================== -->
-
-  <div class="info">
-
-    <span class="info-text">
-      矢印キー・スワイプで操作
-    </span>
-
-    <button
-      id="newGameButton"
-      type="button">
-      新しいゲーム
-    </button>
-
+  <div class="info" style="flex-wrap:wrap;">
+    <span class="info-text">矢印キー / WASD・スワイプで操作</span>
+    <button id="newGameButton" type="button">新しいゲーム</button>
+  </div>
+  <div class="info" style="margin-top:-4px; flex-wrap:wrap;">
+    <label for="modeSelect" style="font-size:14px;font-weight:bold;">モード</label>
+    <select id="modeSelect" aria-label="ゲームモード" style="flex:1;min-width:180px;padding:10px;border:0;border-radius:5px;background:#bbada0;color:white;font-weight:bold;">
+      <option value="standard">スタンダード（1手戻すあり）</option>
+      <option value="hardcore">ハードコア（巻き戻しなし）</option>
+    </select>
+    <button id="undoButton" type="button" disabled>↶ 1手戻す</button>
+    <button id="themeButton" type="button" aria-pressed="false">☾ ダーク</button>
   </div>
 
 
@@ -685,10 +682,10 @@ document.addEventListener(
         "message"
       );
 
-    const newGameButton =
-      document.getElementById(
-        "newGameButton"
-      );
+    const newGameButton = document.getElementById("newGameButton");
+    const modeSelect = document.getElementById("modeSelect");
+    const undoButton = document.getElementById("undoButton");
+    const themeButton = document.getElementById("themeButton");
 
     const secretButton =
       document.getElementById(
@@ -745,6 +742,9 @@ document.addEventListener(
       createEmptyBoard();
 
     let score = 0;
+    let gameMode = "standard";
+    let undoSnapshot = null;
+    let darkMode = false;
 
 
     /*
@@ -808,18 +808,15 @@ document.addEventListener(
     ========================= */
 
     function saveCurrentGame() {
-
       try {
         const state = {
-          version: 1,
-          board: boardData.map(function (row) {
-            return row.map(function (tile) {
-              return tile ? tile.value : null;
-            });
-          }),
+          version: 2,
+          board: boardData.map(function (row) { return row.map(function (tile) { return tile ? tile.value : null; }); }),
           score: score,
           deleteUses: deleteUses,
-          gameOver: messageElement.textContent === "GAME OVER"
+          gameOver: messageElement.textContent === "GAME OVER",
+          gameMode: gameMode,
+          undoSnapshot: undoSnapshot
         };
 
         localStorage.setItem(
@@ -847,11 +844,12 @@ document.addEventListener(
       /* 保存データが壊れていたり、想定外の形式なら復元しない */
       if (
         !state ||
-        state.version !== 1 ||
+        (state.version !== 1 && state.version !== 2) ||
         !Array.isArray(state.board) ||
         state.board.length !== SIZE ||
         !Number.isSafeInteger(state.score) ||
         state.score < 0 ||
+        (state.version === 2 && state.gameMode !== "standard" && state.gameMode !== "hardcore") ||
         !Number.isInteger(state.deleteUses) ||
         state.deleteUses < 0 ||
         state.deleteUses > MAX_DELETE_USES ||
@@ -878,6 +876,9 @@ document.addEventListener(
       tileLayer.innerHTML = "";
       score = state.score;
       deleteUses = state.deleteUses;
+      gameMode = state.version === 2 ? state.gameMode : "standard";
+      modeSelect.value = gameMode;
+      undoSnapshot = state.version === 2 && state.undoSnapshot && gameMode === "standard" ? state.undoSnapshot : null;
       deleteMode = false;
       moveQueue = [];
       moving = false;
@@ -895,6 +896,39 @@ document.addEventListener(
         }
       }
 
+      updateScore();
+      updateUndoButton();
+      return true;
+    }
+
+
+    function updateUndoButton() {
+      undoButton.disabled = gameMode !== "standard" || !undoSnapshot || moving;
+      undoButton.style.opacity = undoButton.disabled ? "0.48" : "1";
+      undoButton.title = gameMode === "hardcore" ? "ハードコアでは巻き戻せません" : "直前の盤面に戻します";
+    }
+
+
+    function restoreSnapshot(snapshot) {
+      if (!snapshot || !Array.isArray(snapshot.board) || snapshot.board.length !== SIZE) return false;
+      for (const row of snapshot.board) {
+        if (!Array.isArray(row) || row.length !== SIZE) return false;
+        for (const value of row) {
+          if (value !== null && (!Number.isSafeInteger(value) || value < 2 || !Number.isInteger(Math.log2(value)))) return false;
+        }
+      }
+      if (!Number.isSafeInteger(snapshot.score) || snapshot.score < 0 || !Number.isInteger(snapshot.deleteUses) || snapshot.deleteUses < 0 || snapshot.deleteUses > MAX_DELETE_USES) return false;
+      boardData = createEmptyBoard();
+      tileLayer.innerHTML = "";
+      for (let row = 0; row < SIZE; row++) {
+        for (let col = 0; col < SIZE; col++) {
+          const value = snapshot.board[row][col];
+          if (value !== null) boardData[row][col] = { value: value, element: createTileElement(value, row, col, false) };
+        }
+      }
+      score = snapshot.score;
+      deleteUses = snapshot.deleteUses;
+      messageElement.textContent = snapshot.gameOver ? "GAME OVER" : "";
       updateScore();
       return true;
     }
@@ -1567,6 +1601,7 @@ document.addEventListener(
        */
 
       score = 0;
+      undoSnapshot = null;
 
 
       /*
@@ -1607,6 +1642,7 @@ document.addEventListener(
        */
 
       updateScore();
+      updateUndoButton();
       saveCurrentGame();
 
     }
@@ -1659,9 +1695,7 @@ document.addEventListener(
        * キューが増えすぎないようにする
        */
 
-      if (
-        moveQueue.length > 20
-      ) {
+      if (moveQueue.length > 4) {
 
         moveQueue.shift();
 
@@ -1712,9 +1746,8 @@ document.addEventListener(
       direction
     ) {
 
-      const oldBoard =
-        boardData;
-
+      const oldBoard = boardData;
+      const scoreBeforeMove = score;
 
       const newBoard =
         createEmptyBoard();
@@ -1901,9 +1934,20 @@ document.addEventListener(
 
 
       /*
+       * スタンダードのみ、移動前の盤面を1手分保存
+       */
+      if (gameMode === "standard") {
+        undoSnapshot = {
+          board: oldBoard.map(function (row) { return row.map(function (tile) { return tile ? tile.value : null; }); }),
+          score: scoreBeforeMove,
+          deleteUses: deleteUses,
+          gameOver: false
+        };
+      }
+
+      /*
        * 盤面更新
        */
-
       boardData =
         newBoard;
 
@@ -1933,6 +1977,7 @@ document.addEventListener(
 
 
       updateScore();
+      updateUndoButton();
 
 
       /* =====================
@@ -2070,6 +2115,7 @@ document.addEventListener(
 
           /* アニメーションと新タイル生成が完了した盤面だけ保存 */
           saveCurrentGame();
+          updateUndoButton();
 
           /*
            * 次の入力
@@ -2462,13 +2508,11 @@ document.addEventListener(
       "keydown",
       function (event) {
 
-        const key =
-          event.key;
+        const key = event.key;
+        if (event.repeat || event.target === secretInput || ["INPUT", "TEXTAREA", "SELECT"].includes(event.target.tagName)) return;
+        const normalizedKey = key.toLowerCase();
 
-
-        if (
-          key === "ArrowLeft"
-        ) {
+        if (key === "ArrowLeft" || normalizedKey === "a") {
 
           event.preventDefault();
 
@@ -2476,9 +2520,7 @@ document.addEventListener(
 
         }
 
-        else if (
-          key === "ArrowRight"
-        ) {
+        else if (key === "ArrowRight" || normalizedKey === "d") {
 
           event.preventDefault();
 
@@ -2486,9 +2528,7 @@ document.addEventListener(
 
         }
 
-        else if (
-          key === "ArrowUp"
-        ) {
+        else if (key === "ArrowUp" || normalizedKey === "w") {
 
           event.preventDefault();
 
@@ -2496,9 +2536,7 @@ document.addEventListener(
 
         }
 
-        else if (
-          key === "ArrowDown"
-        ) {
+        else if (key === "ArrowDown" || normalizedKey === "s") {
 
           event.preventDefault();
 
@@ -2514,14 +2552,46 @@ document.addEventListener(
        新しいゲーム
     ========================= */
 
-    newGameButton.addEventListener(
-      "click",
-      function () {
+    newGameButton.addEventListener("click", function () {
+      if (window.confirm("今のゲームを終了して、新しいゲームを始めますか？")) newGame();
+    });
 
-        newGame();
-
+    modeSelect.addEventListener("change", function () {
+      const nextMode = modeSelect.value === "hardcore" ? "hardcore" : "standard";
+      if (nextMode === gameMode) return;
+      if (!window.confirm("モードを変更すると、現在のゲームを終了して新しい盤面を開始します。よろしいですか？")) {
+        modeSelect.value = gameMode;
+        return;
       }
-    );
+      gameMode = nextMode;
+      undoSnapshot = null;
+      newGame();
+    });
+
+    undoButton.addEventListener("click", function () {
+      if (gameMode !== "standard" || !undoSnapshot || moving) return;
+      const snapshot = undoSnapshot;
+      undoSnapshot = null;
+      moveQueue = [];
+      deleteMode = false;
+      if (restoreSnapshot(snapshot)) {
+        saveCurrentGame();
+        updateUndoButton();
+      }
+    });
+
+    themeButton.addEventListener("click", function () {
+      darkMode = !darkMode;
+      document.body.classList.toggle("dark-mode", darkMode);
+      themeButton.textContent = darkMode ? "☀ ライト" : "☾ ダーク";
+      themeButton.setAttribute("aria-pressed", String(darkMode));
+      try { localStorage.setItem("2048-theme", darkMode ? "dark" : "light"); } catch (error) {}
+    });
+
+    try { darkMode = localStorage.getItem("2048-theme") === "dark"; } catch (error) {}
+    document.body.classList.toggle("dark-mode", darkMode);
+    themeButton.textContent = darkMode ? "☀ ライト" : "☾ ダーク";
+    themeButton.setAttribute("aria-pressed", String(darkMode));
 
 
     /* =========================
@@ -2593,8 +2663,7 @@ document.addEventListener(
 
         if (
 
-          Math.abs(dx) < 30 &&
-          Math.abs(dy) < 30
+          Math.max(Math.abs(dx), Math.abs(dy)) < 24
 
         ) {
 
@@ -2740,8 +2809,9 @@ document.addEventListener(
        初期化
     ========================= */
 
-    bestElement.textContent =
-      best;
+    bestElement.textContent = best;
+    modeSelect.value = gameMode;
+    updateUndoButton();
 
 
     /* 保存済みゲームがあれば続きから。なければ新規開始 */
