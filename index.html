@@ -724,6 +724,13 @@ document.addEventListener(
 
 
     /*
+     * 現在のゲームを保存するキー。
+     * BESTスコア用の「2048-best」とは分けて管理する。
+     */
+    const CURRENT_GAME_KEY = "2048-current-game";
+
+
+    /*
      * タイトルの必要タップ回数
      */
 
@@ -794,6 +801,103 @@ document.addEventListener(
      */
 
     let secretTapTimer = null;
+
+
+    /* =========================
+       セーブ / ロード
+    ========================= */
+
+    function saveCurrentGame() {
+
+      try {
+        const state = {
+          version: 1,
+          board: boardData.map(function (row) {
+            return row.map(function (tile) {
+              return tile ? tile.value : null;
+            });
+          }),
+          score: score,
+          deleteUses: deleteUses,
+          gameOver: messageElement.textContent === "GAME OVER"
+        };
+
+        localStorage.setItem(
+          CURRENT_GAME_KEY,
+          JSON.stringify(state)
+        );
+      } catch (error) {
+        /* 保存容量不足や保存禁止でもゲーム自体は続ける */
+      }
+    }
+
+
+    function loadCurrentGame() {
+
+      let state;
+
+      try {
+        const saved = localStorage.getItem(CURRENT_GAME_KEY);
+        if (!saved) return false;
+        state = JSON.parse(saved);
+      } catch (error) {
+        return false;
+      }
+
+      /* 保存データが壊れていたり、想定外の形式なら復元しない */
+      if (
+        !state ||
+        state.version !== 1 ||
+        !Array.isArray(state.board) ||
+        state.board.length !== SIZE ||
+        !Number.isSafeInteger(state.score) ||
+        state.score < 0 ||
+        !Number.isInteger(state.deleteUses) ||
+        state.deleteUses < 0 ||
+        state.deleteUses > MAX_DELETE_USES ||
+        typeof state.gameOver !== "boolean"
+      ) {
+        return false;
+      }
+
+      for (const row of state.board) {
+        if (!Array.isArray(row) || row.length !== SIZE) {
+          return false;
+        }
+        for (const value of row) {
+          if (
+            value !== null &&
+            (!Number.isSafeInteger(value) || value < 2 || (value & (value - 1)) !== 0)
+          ) {
+            return false;
+          }
+        }
+      }
+
+      boardData = createEmptyBoard();
+      tileLayer.innerHTML = "";
+      score = state.score;
+      deleteUses = state.deleteUses;
+      deleteMode = false;
+      moveQueue = [];
+      moving = false;
+      messageElement.textContent = state.gameOver ? "GAME OVER" : "";
+
+      for (let row = 0; row < SIZE; row++) {
+        for (let col = 0; col < SIZE; col++) {
+          const value = state.board[row][col];
+          if (value === null) continue;
+
+          boardData[row][col] = {
+            value: value,
+            element: createTileElement(value, row, col, false)
+          };
+        }
+      }
+
+      updateScore();
+      return true;
+    }
 
 
     /* =========================
@@ -1191,6 +1295,7 @@ document.addEventListener(
 
                 deleteMode = false;
 
+                saveCurrentGame();
 
                 return;
 
@@ -1498,10 +1603,11 @@ document.addEventListener(
 
 
       /*
-       * スコア表示
+       * スコア表示と新しい盤面の保存
        */
 
       updateScore();
+      saveCurrentGame();
 
     }
 
@@ -1962,6 +2068,8 @@ document.addEventListener(
 
           moving = false;
 
+          /* アニメーションと新タイル生成が完了した盤面だけ保存 */
+          saveCurrentGame();
 
           /*
            * 次の入力
@@ -2636,7 +2744,10 @@ document.addEventListener(
       best;
 
 
-    newGame();
+    /* 保存済みゲームがあれば続きから。なければ新規開始 */
+    if (!loadCurrentGame()) {
+      newGame();
+    }
 
   }
 
