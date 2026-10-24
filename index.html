@@ -783,6 +783,10 @@ document.addEventListener(
      * BESTスコア用の「2048-best」とは分けて管理する。
      */
     const CURRENT_GAME_KEY = "2048-current-game";
+    const MODE_GAME_KEYS = {
+      standard: "2048-current-game-standard",
+      hardcore: "2048-current-game-hardcore"
+    };
 
 
     /*
@@ -892,22 +896,41 @@ document.addEventListener(
           undoSnapshot: undoSnapshot
         };
 
-        localStorage.setItem(
-          CURRENT_GAME_KEY,
-          JSON.stringify(state)
-        );
+        const serialized = JSON.stringify(state);
+        // モードごとに盤面を独立保存し、切り替え後も続きから再開する。
+        localStorage.setItem(MODE_GAME_KEYS[gameMode], serialized);
+        // 旧バージョンとの互換性のため、直近のゲームも保持する。
+        localStorage.setItem(CURRENT_GAME_KEY, serialized);
       } catch (error) {
         /* 保存容量不足や保存禁止でもゲーム自体は続ける */
       }
     }
 
 
-    function loadCurrentGame() {
+    function loadCurrentGame(requestedMode) {
 
       let state;
+      const targetMode = requestedMode === "hardcore" ? "hardcore" : "standard";
 
       try {
-        const saved = localStorage.getItem(CURRENT_GAME_KEY);
+        // まず指定モード専用のセーブを読む。
+        let saved = localStorage.getItem(MODE_GAME_KEYS[targetMode]);
+
+        // 専用セーブがまだない場合だけ、旧形式のセーブを安全に移行する。
+        if (!saved) {
+          const legacySaved = localStorage.getItem(CURRENT_GAME_KEY);
+          if (legacySaved) {
+            const legacyState = JSON.parse(legacySaved);
+            const legacyMode = legacyState && legacyState.version === 2
+              ? legacyState.gameMode
+              : "standard";
+            if (legacyMode === targetMode) {
+              saved = legacySaved;
+              localStorage.setItem(MODE_GAME_KEYS[targetMode], saved);
+            }
+          }
+        }
+
         if (!saved) return false;
         state = JSON.parse(saved);
       } catch (error) {
@@ -949,7 +972,7 @@ document.addEventListener(
       tileLayer.innerHTML = "";
       score = state.score;
       deleteUses = state.deleteUses;
-      gameMode = state.version === 2 ? state.gameMode : "standard";
+      gameMode = targetMode;
       modeSelect.value = gameMode;
       undoSnapshot = state.version === 2 && state.undoSnapshot && gameMode === "standard" ? state.undoSnapshot : null;
       deleteMode = false;
@@ -2636,11 +2659,17 @@ document.addEventListener(
         modeSelect.value = gameMode;
         return;
       }
+      // 切り替える前に、今のモードの盤面を必ず保存する。
+      saveCurrentGame();
       gameMode = nextMode;
       loadBestForMode(gameMode);
       bestElement.textContent = best;
-      undoSnapshot = null;
-      newGame();
+
+      // 切り替え先の続きがあれば復元し、初回だけ新しい盤面を作る。
+      if (!loadCurrentGame(gameMode)) {
+        undoSnapshot = null;
+        newGame();
+      }
     });
 
     undoButton.addEventListener("click", function () {
