@@ -811,12 +811,27 @@ document.addEventListener(
      * ブラウザのlocalStorageに保存
      */
 
-    let best =
-      Number(
-        localStorage.getItem(
-          "2048-best"
-        )
-      ) || 0;
+    const BEST_KEYS = {
+      standard: "2048-best-standard",
+      hardcore: "2048-best-hardcore"
+    };
+
+    function loadBestForMode(mode) {
+      const key = BEST_KEYS[mode === "hardcore" ? "hardcore" : "standard"];
+      let saved = localStorage.getItem(key);
+
+      // 旧バージョンの共通ベストは、スタンダード側へ一度だけ引き継ぐ。
+      if (mode !== "hardcore" && saved === null) {
+        const legacyBest = Number(localStorage.getItem("2048-best")) || 0;
+        saved = String(legacyBest);
+        localStorage.setItem(key, saved);
+      }
+
+      best = Number(saved) || 0;
+    }
+
+    let best = 0;
+    loadBestForMode(gameMode);
 
 
     /*
@@ -1588,7 +1603,7 @@ document.addEventListener(
          */
 
         localStorage.setItem(
-          "2048-best",
+          BEST_KEYS[gameMode],
           String(best)
         );
 
@@ -2622,6 +2637,8 @@ document.addEventListener(
         return;
       }
       gameMode = nextMode;
+      loadBestForMode(gameMode);
+      bestElement.textContent = best;
       undoSnapshot = null;
       newGame();
     });
