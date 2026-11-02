@@ -2838,11 +2838,14 @@ document.addEventListener(
           localStorage.setItem(CURRENT_GAME_KEY, JSON.stringify(data.games[gameMode] || data.games.standard || data.games.hardcore));
           localStorage.setItem("2048-theme", data.theme);
 
+          // 読み込み先端末の古いBESTを参照する前に、インポートしたBESTを現在値へ反映する。
+          loadBestForMode(gameMode);
+
           if (!loadCurrentGame(gameMode)) {
             const fallbackMode = data.games.standard ? "standard" : "hardcore";
             if (!loadCurrentGame(fallbackMode)) throw new Error("restore-failed");
           }
-          loadBestForMode(gameMode);
+          // loadCurrentGame内のupdateScore()で、現在スコアがBESTを上回る場合も更新される。
           bestElement.textContent = best;
           darkMode = data.theme === "dark";
           document.body.classList.toggle("dark-mode", darkMode);
